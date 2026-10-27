@@ -1,0 +1,8 @@
+# RESPALDOS Y VOLCADOS DE BASES (NUNCA SE SUBEN: PUEDEN TENER DATOS REALES)
+*.backup
+*.dump
+*.bak
+respaldos/
+# CREDENCIALES
+.env
+*.env
