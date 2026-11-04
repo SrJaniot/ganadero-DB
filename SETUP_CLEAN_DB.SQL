@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- SETUP_CLEAN_DB.SQL - BASE DE DATOS DE NEGOCIO DE GANADERO
 -- ARCHIVO GENERADO CON generar_setup.sh, NO EDITAR A MANO
--- FECHA: 2026-10-27 13:31
+-- FECHA: 2026-11-04 15:50
 -- ════════════════════════════════════════════════════════════════════════════
 
 
@@ -2020,6 +2020,14 @@ BEGIN
         RETURN jVALIDACION;
     ELSIF jSEXO = 'M' AND EXISTS (SELECT 1 FROM TAB_PARTOS WHERE ID_ANIMAL = jID_ANIMAL AND ESTADO_PARTO = 'ACTIVO') THEN
         RETORNO := json_build_object('CODIGO', 400, 'MENSAJE', 'No se puede cambiar a macho: tiene partos registrados');
+        RETURN RETORNO;
+    --EL SEXO TAMPOCO CAMBIA SI YA ES MADRE O PADRE DE OTROS ANIMALES, O SI FUE EL TORO DE UN SERVICIO (HALLADO EN LA FASE 1)
+    ELSIF jSEXO = 'M' AND EXISTS (SELECT 1 FROM TAB_ANIMALES WHERE ID_MADRE = jID_ANIMAL AND ESTADO_ANIMAL <> 'ANULADO') THEN
+        RETORNO := json_build_object('CODIGO', 400, 'MENSAJE', 'No se puede cambiar a macho: es la madre de otros animales');
+        RETURN RETORNO;
+    ELSIF jSEXO = 'H' AND (EXISTS (SELECT 1 FROM TAB_ANIMALES WHERE ID_PADRE = jID_ANIMAL AND ESTADO_ANIMAL <> 'ANULADO')
+                        OR EXISTS (SELECT 1 FROM TAB_SERVICIOS WHERE ID_TORO = jID_ANIMAL AND ESTADO_SERVICIO = 'ACTIVO')) THEN
+        RETORNO := json_build_object('CODIGO', 400, 'MENSAJE', 'No se puede cambiar a hembra: es el padre de otros animales o el toro de un servicio');
         RETURN RETORNO;
     END IF;
 
