@@ -8,7 +8,12 @@ INSERT INTO TAB_CONFIGURACION (ID_CONFIGURACION, NOM_CONFIGURACION, VALOR_CONFIG
 (3, 'COEFICIENTE_CINTA', '80', '80', 'Peso con cinta (fórmula de Quetelet): kilos = (perímetro torácico en metros)³ × este número. Es una estimación', 'SISTEMA'),
 (4, 'MARGEN_SINCRONIZACION_SEGUNDOS', '5', '5', 'Segundos que se restan a la marca al bajar cambios, para no perder lo que se guardaba en ese momento', 'SISTEMA'),
 (5, 'LOTE_MAXIMO_SINCRONIZACION', '50', '50', 'Máximo de registros que el celular sube en cada envío', 'SISTEMA'),
-(6, 'MESES_MINIMOS_SERVICIO', '12', '12', 'Edad mínima en meses para registrar un servicio (monta o inseminación) a una hembra', 'SISTEMA')
+(6, 'MESES_MINIMOS_SERVICIO', '12', '12', 'Edad mínima en meses para registrar un servicio (monta o inseminación) a una hembra', 'SISTEMA'),
+--FASE 3: DIAS DE LAS ALERTAS DE LA PANTALLA "HOY"
+(7, 'DIAS_AVISO_PARTO', '30', '30', 'Días antes del parto probable en que empieza a salir en "Partos próximos"', 'SISTEMA'),
+(8, 'DIAS_PALPAR_DESPUES_SERVICIO', '45', '45', 'Días después del servicio en que se pide palpar si aún no se ha palpado', 'SISTEMA'),
+(9, 'DIAS_VACIA_ALERTA', '120', '120', 'Días después del parto en que una vaca sin servir ni preñada sale como "vacía"', 'SISTEMA'),
+(10, 'DIAS_AVISO_VACUNA', '15', '15', 'Días antes de la próxima dosis en que la vacuna sale como "por aplicar"', 'SISTEMA')
 ON CONFLICT (NOM_CONFIGURACION) DO NOTHING;
 
 
