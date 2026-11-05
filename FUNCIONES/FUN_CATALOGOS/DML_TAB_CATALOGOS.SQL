@@ -13,7 +13,11 @@ INSERT INTO TAB_CONFIGURACION (ID_CONFIGURACION, NOM_CONFIGURACION, VALOR_CONFIG
 (7, 'DIAS_AVISO_PARTO', '30', '30', 'Días antes del parto probable en que empieza a salir en "Partos próximos"', 'SISTEMA'),
 (8, 'DIAS_PALPAR_DESPUES_SERVICIO', '45', '45', 'Días después del servicio en que se pide palpar si aún no se ha palpado', 'SISTEMA'),
 (9, 'DIAS_VACIA_ALERTA', '120', '120', 'Días después del parto en que una vaca sin servir ni preñada sale como "vacía"', 'SISTEMA'),
-(10, 'DIAS_AVISO_VACUNA', '15', '15', 'Días antes de la próxima dosis en que la vacuna sale como "por aplicar"', 'SISTEMA')
+(10, 'DIAS_AVISO_VACUNA', '15', '15', 'Días antes de la próxima dosis en que la vacuna sale como "por aplicar"', 'SISTEMA'),
+--FASE 5D: RESUMEN DIARIO POR WHATSAPP (LO CAMBIA EL ADMINISTRADOR EN SU PANTALLA DE WHATSAPP)
+(11, 'INSTANCIA_WHATSAPP', 'ganadero', 'ganadero', 'Nombre de la instancia de Evolution API que manda los mensajes (una por instalación)', 'SISTEMA'),
+(12, 'HORA_RESUMEN_WHATSAPP', '06:00', '06:00', 'Hora (de Colombia) en que sale el resumen diario a los dueños que lo pidieron', 'SISTEMA'),
+(13, 'WHATSAPP_ACTIVO', 'NO', 'NO', 'SI cuando el número ya está vinculado y el resumen debe salir; NO lo apaga para todos', 'SISTEMA')
 ON CONFLICT (NOM_CONFIGURACION) DO NOTHING;
 
 
