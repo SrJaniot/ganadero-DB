@@ -1,0 +1,10 @@
+# RESIEMBRA NOCTURNA DE LA DEMO DE GANADERO (demoganadera.ejaniot.com). LO DISPARA demoganadera-resembrar.timer
+# SE INSTALA EN /etc/systemd/system/ (VER DOCUMENTACION_SERVIDOR.md, DEMO DE GANADERO). CORRE COMO ejaniot, SIN ROOT
+[Unit]
+Description=Resiembra de la demo de Ganadero (Finca La Esperanza)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=ejaniot
+ExecStart=/bin/sh /home/ejaniot/proyectos/demoganadera/db/DEMO/resembrar_demo.sh

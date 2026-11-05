@@ -1,0 +1,10 @@
+# CADA MADRUGADA A LAS 4:30 (DESPUES DEL REINICIO DE PM2 DE LAS 3) LA DEMO VUELVE A QUEDAR COMO NUEVA, CON LAS FECHAS DE HOY
+[Unit]
+Description=Resiembra nocturna de la demo de Ganadero
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
