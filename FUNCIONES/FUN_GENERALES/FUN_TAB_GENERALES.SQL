@@ -233,6 +233,8 @@ BEGIN
         WHEN 'PARTO'      THEN json_build_object('TABLA', 'TAB_PARTOS',       'ID', 'ID_PARTO',      'UUID', 'UUID_PARTO',      'ESTADO', 'ESTADO_PARTO')
         WHEN 'ORDENO'     THEN json_build_object('TABLA', 'TAB_ORDENOS',      'ID', 'ID_ORDENO',     'UUID', 'UUID_ORDENO',     'ESTADO', 'ESTADO_ORDENO')
         WHEN 'SALIDA'     THEN json_build_object('TABLA', 'TAB_SALIDAS',      'ID', 'ID_SALIDA',     'UUID', 'UUID_SALIDA',     'ESTADO', 'ESTADO_SALIDA')
+        WHEN 'POTRERO'    THEN json_build_object('TABLA', 'TAB_POTREROS',     'ID', 'ID_POTRERO',    'UUID', 'UUID_POTRERO',    'ESTADO', 'ESTADO_POTRERO')
+        WHEN 'OCUPACION'  THEN json_build_object('TABLA', 'TAB_OCUPACIONES',  'ID', 'ID_OCUPACION',  'UUID', 'UUID_OCUPACION',  'ESTADO', 'ESTADO_OCUPACION')
         ELSE NULL
     END;
 END;

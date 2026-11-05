@@ -1,0 +1,121 @@
+-- PRUEBAS DE LAS FUNCIONES DE POTREROS Y OCUPACIONES (FASE 5A)
+-- SE EJECUTAN DENTRO DE UNA TRANSACCION Y AL FINAL SE HACE ROLLBACK PARA NO DEJAR DATOS DE PRUEBA
+-- ESCENARIO: POTREROS "La Loma" (30 DIAS DE DESCANSO) Y "El Bajo" (20 DIAS); LOTES "Ordeño" Y "Horras"
+--   ORDEÑO ENTRO A LA LOMA HACE 40 DIAS Y SE PASO AL BAJO HACE 25 -> LA LOMA DESCANSA 25 DE 30; EL BAJO OCUPADO 25 DIAS
+--   HORRAS ENTRO AL BAJO HACE 10 DIAS Y SALIO HACE 0 (SACAR)        -> EL BAJO SIGUE OCUPADO (POR ORDEÑO)
+BEGIN;
+
+SELECT FUN_CREAR_FINCA_JSON('Finca Prueba', 'San Gil', NULL, NULL, NULL, 'PRU-DUENO', 'Dueño Prueba') ->> 'CODIGO' AS FINCA_200;
+CREATE FUNCTION pg_temp.FINCA() RETURNS INTEGER AS $$ SELECT ID_FINCA FROM TAB_FINCAS WHERE NOM_FINCA = 'Finca Prueba' $$ LANGUAGE sql;
+CREATE FUNCTION pg_temp.U(jSUFIJO VARCHAR) RETURNS UUID AS $$ SELECT ('00000000-0000-0000-0000-' || lpad(jSUFIJO, 12, '0'))::UUID $$ LANGUAGE sql;
+CREATE FUNCTION pg_temp.HACE(jDIAS INTEGER) RETURNS TIMESTAMP AS $$ SELECT (CURRENT_DATE - jDIAS) + TIME '08:00' $$ LANGUAGE sql;
+CREATE FUNCTION pg_temp.ESTADO(jNOMBRE VARCHAR) RETURNS JSON AS $$
+    SELECT E -> 'ESTADO_HOY' FROM json_array_elements(FUN_OBTENER_POTREROS_JSON(pg_temp.FINCA(), 'PRU-DUENO') -> 'DATOS') E WHERE E ->> 'NOM_POTRERO' = jNOMBRE
+$$ LANGUAGE sql;
+SELECT FUN_AGREGAR_PERSONA_FINCA_JSON(pg_temp.FINCA(), 'PRU-VAQUERO', 'Vaquero Prueba', 'VAQUERO', 'PRU-DUENO') ->> 'CODIGO' AS VAQUERO_200;
+SELECT FUN_CREAR_LOTE_JSON(pg_temp.U('A1'), pg_temp.FINCA(), 'Ordeño', 'PRU-DUENO') ->> 'CODIGO' AS LOTE_ORDENO_200,
+       FUN_CREAR_LOTE_JSON(pg_temp.U('A2'), pg_temp.FINCA(), 'Horras', 'PRU-DUENO') ->> 'CODIGO' AS LOTE_HORRAS_200;
+
+
+SELECT 'PRUEBA 1.1: Crear potreros. DEBE SALIR 200, 200 (EL VAQUERO TAMBIEN CREA) Y 200 AL REPETIR EL UUID (YA_EXISTIA true)' as PRUEBA;
+SELECT FUN_CREAR_POTRERO_JSON(pg_temp.U('B1'), pg_temp.FINCA(), '  La   Loma ', 4.5, 30, '[[6.55,-73.13],[6.551,-73.13],[6.551,-73.131]]'::JSON, 'PRU-DUENO') ->> 'CODIGO' AS LOMA_200,
+       FUN_CREAR_POTRERO_JSON(pg_temp.U('B2'), pg_temp.FINCA(), 'El Bajo', NULL, 20, NULL, 'PRU-VAQUERO') ->> 'CODIGO' AS BAJO_VAQUERO_200,
+       FUN_CREAR_POTRERO_JSON(pg_temp.U('B1'), pg_temp.FINCA(), 'La Loma', 4.5, 30, NULL, 'PRU-DUENO') -> 'DATOS' ->> 'YA_EXISTIA' AS REPETIDO_TRUE;
+SELECT 'PRUEBA 1.2: El nombre se limpia. DEBE SALIR "La Loma"' as PRUEBA;
+SELECT NOM_POTRERO FROM TAB_POTREROS WHERE UUID_POTRERO = pg_temp.U('B1');
+
+SELECT 'PRUEBA 1.3: Validaciones. DEBEN SALIR 400 (NOMBRE REPETIDO, SIN NOMBRE, AREA 0, DESCANSO 0, CONTORNO DE 2 PUNTOS, PUNTO FUERA DE COLOMBIA) Y 400 SI ES UN EXTRAÑO' as PRUEBA;
+SELECT FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), 'la loma', NULL, 30, NULL, 'PRU-DUENO') ->> 'MENSAJE' AS REPETIDO,
+       FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), ' ', NULL, 30, NULL, 'PRU-DUENO') ->> 'CODIGO' AS SIN_NOMBRE_400,
+       FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), 'X', 0, 30, NULL, 'PRU-DUENO') ->> 'CODIGO' AS AREA_400,
+       FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), 'X', NULL, 0, NULL, 'PRU-DUENO') ->> 'CODIGO' AS DESCANSO_400,
+       FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), 'X', NULL, 30, '[[6.5,-73.1],[6.6,-73.1]]'::JSON, 'PRU-DUENO') ->> 'CODIGO' AS DOS_PUNTOS_400,
+       FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), 'X', NULL, 30, '[[40.4,-3.7],[40.5,-3.7],[40.5,-3.8]]'::JSON, 'PRU-DUENO') ->> 'CODIGO' AS MADRID_400,
+       FUN_CREAR_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), 'X', NULL, 30, NULL, 'PRU-EXTRANO') ->> 'CODIGO' AS EXTRANO_400;
+
+SELECT 'PRUEBA 1.4: Sin uso. DEBE SALIR SIN_USO EN LOS DOS' as PRUEBA;
+SELECT pg_temp.ESTADO('La Loma') ->> 'ESTADO' AS LOMA, pg_temp.ESTADO('El Bajo') ->> 'ESTADO' AS BAJO;
+
+
+SELECT 'PRUEBA 2.1: Rotación. ORDEÑO A LA LOMA HACE 40 DIAS (200), AL BAJO HACE 25 (200, CIERRA LA LOMA); HORRAS AL BAJO HACE 10 (200, LO HACE EL VAQUERO)' as PRUEBA;
+SELECT FUN_ENTRAR_LOTE_POTRERO_JSON(pg_temp.U('C1'), pg_temp.FINCA(), pg_temp.U('A1'), pg_temp.U('B1'), pg_temp.HACE(40), NULL, 'PRU-DUENO') ->> 'CODIGO' AS ORDENO_LOMA_200;
+SELECT FUN_ENTRAR_LOTE_POTRERO_JSON(pg_temp.U('C2'), pg_temp.FINCA(), pg_temp.U('A1'), pg_temp.U('B2'), pg_temp.HACE(25), NULL, 'PRU-DUENO') ->> 'CODIGO' AS ORDENO_BAJO_200;
+SELECT FUN_ENTRAR_LOTE_POTRERO_JSON(pg_temp.U('C3'), pg_temp.FINCA(), pg_temp.U('A2'), pg_temp.U('B2'), pg_temp.HACE(10), NULL, 'PRU-VAQUERO') ->> 'CODIGO' AS HORRAS_BAJO_200;
+SELECT 'PRUEBA 2.2: La ocupación anterior quedó cerrada con la fecha de la entrada nueva. DEBE SALIR true' as PRUEBA;
+SELECT FECHA_SALIDA_OCUPACION = pg_temp.HACE(25) AS CERRADA_TRUE FROM TAB_OCUPACIONES WHERE UUID_OCUPACION = pg_temp.U('C1');
+
+SELECT 'PRUEBA 2.3: Estados. LA LOMA DESCANSANDO 25 DE 30; EL BAJO OCUPADO 25 DIAS CON 2 LOTES (ORDEÑO 25, HORRAS 10)' as PRUEBA;
+SELECT pg_temp.ESTADO('La Loma') ->> 'ESTADO' AS LOMA, pg_temp.ESTADO('La Loma') ->> 'DIAS_DESCANSO' AS LOMA_DIAS_25,
+       pg_temp.ESTADO('El Bajo') ->> 'ESTADO' AS BAJO, pg_temp.ESTADO('El Bajo') ->> 'DIAS_OCUPADO' AS BAJO_DIAS_25,
+       json_array_length(pg_temp.ESTADO('El Bajo') -> 'LOTES') AS LOTES_2;
+
+SELECT 'PRUEBA 2.4: Reglas al entrar. DEBEN SALIR 400: YA ESTA EN ESE POTRERO, FECHA ANTERIOR AL ULTIMO MOVIMIENTO, FECHA FUTURA, LOTE QUE NO EXISTE (404) Y 200 AL REPETIR EL UUID' as PRUEBA;
+SELECT FUN_ENTRAR_LOTE_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), pg_temp.U('A1'), pg_temp.U('B2'), pg_temp.HACE(1), NULL, 'PRU-DUENO') ->> 'MENSAJE' AS YA_ESTA,
+       FUN_ENTRAR_LOTE_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), pg_temp.U('A1'), pg_temp.U('B1'), pg_temp.HACE(30), NULL, 'PRU-DUENO') ->> 'MENSAJE' AS ANTES,
+       FUN_ENTRAR_LOTE_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), pg_temp.U('A1'), pg_temp.U('B1'), pg_temp.HACE(-3), NULL, 'PRU-DUENO') ->> 'CODIGO' AS FUTURA_400,
+       FUN_ENTRAR_LOTE_POTRERO_JSON(gen_random_uuid(), pg_temp.FINCA(), gen_random_uuid(), pg_temp.U('B1'), pg_temp.HACE(0), NULL, 'PRU-DUENO') ->> 'CODIGO' AS LOTE_404,
+       FUN_ENTRAR_LOTE_POTRERO_JSON(pg_temp.U('C3'), pg_temp.FINCA(), pg_temp.U('A2'), pg_temp.U('B2'), pg_temp.HACE(10), NULL, 'PRU-VAQUERO') -> 'DATOS' ->> 'YA_EXISTIA' AS REPETIDO_TRUE;
+
+SELECT 'PRUEBA 2.5: No se puede anular un potrero con un lote adentro. DEBE SALIR 400' as PRUEBA;
+SELECT FUN_ANULAR_POTRERO_JSON(pg_temp.U('B2'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'CODIGO' AS ANULAR_OCUPADO_400;
+
+
+SELECT 'PRUEBA 3.1: Sacar a Horras hoy. DEBE SALIR 200; 200 CON YA_EXISTIA AL REPETIR; 400 SI SE SACA ANTES DE ENTRAR' as PRUEBA;
+SELECT FUN_SACAR_LOTE_POTRERO_JSON(pg_temp.U('C2'), pg_temp.FINCA(), pg_temp.HACE(30), 'PRU-DUENO') ->> 'CODIGO' AS ANTES_DE_ENTRAR_400;
+SELECT FUN_SACAR_LOTE_POTRERO_JSON(pg_temp.U('C3'), pg_temp.FINCA(), pg_temp.HACE(0), 'PRU-VAQUERO') ->> 'CODIGO' AS SACAR_200;
+SELECT FUN_SACAR_LOTE_POTRERO_JSON(pg_temp.U('C3'), pg_temp.FINCA(), pg_temp.HACE(0), 'PRU-VAQUERO') -> 'DATOS' ->> 'YA_EXISTIA' AS REPETIDO_TRUE;
+SELECT 'PRUEBA 3.2: El Bajo sigue ocupado, ahora con 1 lote' as PRUEBA;
+SELECT pg_temp.ESTADO('El Bajo') ->> 'ESTADO' AS BAJO, json_array_length(pg_temp.ESTADO('El Bajo') -> 'LOTES') AS LOTES_1;
+
+
+SELECT 'PRUEBA 4.1: Anular. EL VAQUERO NO PUEDE (400); EL PRIMER MOVIMIENTO DE ORDEÑO NO SE PUEDE (NO ES EL ULTIMO); EL ULTIMO SI Y ORDEÑO VUELVE A LA LOMA' as PRUEBA;
+SELECT FUN_ANULAR_OCUPACION_JSON(pg_temp.U('C2'), pg_temp.FINCA(), 'PRU-VAQUERO') ->> 'CODIGO' AS VAQUERO_400,
+       FUN_ANULAR_OCUPACION_JSON(pg_temp.U('C1'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'MENSAJE' AS NO_ES_EL_ULTIMO;
+SELECT FUN_ANULAR_OCUPACION_JSON(pg_temp.U('C2'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'MENSAJE' AS ANULAR_ULTIMO;
+SELECT pg_temp.ESTADO('La Loma') ->> 'ESTADO' AS LOMA_OCUPADO, pg_temp.ESTADO('La Loma') ->> 'DIAS_OCUPADO' AS LOMA_DIAS_40,
+       pg_temp.ESTADO('El Bajo') ->> 'ESTADO' AS BAJO_DESCANSANDO, pg_temp.ESTADO('El Bajo') ->> 'DIAS_DESCANSO' AS BAJO_DIAS_0;
+
+
+SELECT 'PRUEBA 4.2: Dos movimientos con la misma hora (se equivocó y corrigió en el mismo minuto). HORRAS A LA LOMA Y AL BAJO A LAS 09:00; SE ANULA EL SEGUNDO (200) Y HORRAS VUELVE A LA LOMA' as PRUEBA;
+SELECT FUN_ENTRAR_LOTE_POTRERO_JSON(pg_temp.U('C5'), pg_temp.FINCA(), pg_temp.U('A2'), pg_temp.U('B1'), CURRENT_DATE + TIME '09:00', NULL, 'PRU-DUENO') ->> 'CODIGO' AS A_LA_LOMA_200;
+SELECT FUN_ENTRAR_LOTE_POTRERO_JSON(pg_temp.U('C6'), pg_temp.FINCA(), pg_temp.U('A2'), pg_temp.U('B2'), CURRENT_DATE + TIME '09:00', NULL, 'PRU-DUENO') ->> 'CODIGO' AS AL_BAJO_200;
+SELECT FUN_ANULAR_OCUPACION_JSON(pg_temp.U('C5'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'CODIGO' AS EL_PRIMERO_NO_400,
+       FUN_ANULAR_OCUPACION_JSON(pg_temp.U('C6'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'CODIGO' AS EL_SEGUNDO_200;
+SELECT FECHA_SALIDA_OCUPACION IS NULL AS HORRAS_EN_LA_LOMA_TRUE FROM TAB_OCUPACIONES WHERE UUID_OCUPACION = pg_temp.U('C5');
+SELECT FUN_ANULAR_OCUPACION_JSON(pg_temp.U('C5'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'CODIGO' AS DESHACER_200;
+
+SELECT 'PRUEBA 5.1: Anular el lote Ordeño lo saca de la Loma hoy: LA LOMA QUEDA DESCANSANDO CON 0 DIAS' as PRUEBA;
+SELECT FUN_ANULAR_LOTE_JSON(pg_temp.U('A1'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'CODIGO' AS ANULAR_LOTE_200;
+SELECT pg_temp.ESTADO('La Loma') ->> 'ESTADO' AS LOMA, pg_temp.ESTADO('La Loma') ->> 'DIAS_DESCANSO' AS DIAS_0;
+
+SELECT 'PRUEBA 5.2: Listo. CON LA ULTIMA SALIDA DEL BAJO HACE 20 DIAS (SE CORRE LA FECHA), EL BAJO SALE LISTO' as PRUEBA;
+UPDATE TAB_OCUPACIONES SET FECHA_EVENTO = pg_temp.HACE(30), FECHA_SALIDA_OCUPACION = pg_temp.HACE(20) WHERE UUID_OCUPACION = pg_temp.U('C3');
+SELECT pg_temp.ESTADO('El Bajo') ->> 'ESTADO' AS BAJO_LISTO, pg_temp.ESTADO('El Bajo') ->> 'DIAS_DESCANSO' AS DIAS_20;
+
+
+SELECT 'PRUEBA 6.1: Editar y anular el potrero. EL VAQUERO NO EDITA (400); EL DUEÑO SI (200, 25 DIAS); ANULAR 200 Y REPETIR 200 YA_EXISTIA' as PRUEBA;
+SELECT FUN_ACTUALIZAR_POTRERO_JSON(pg_temp.U('B2'), pg_temp.FINCA(), 'El Bajo', 3, 25, NULL, 'PRU-VAQUERO') ->> 'CODIGO' AS VAQUERO_400,
+       FUN_ACTUALIZAR_POTRERO_JSON(pg_temp.U('B2'), pg_temp.FINCA(), 'El Bajo', 3, 25, NULL, 'PRU-DUENO') ->> 'CODIGO' AS EDITAR_200;
+SELECT DIAS_DESCANSO_POTRERO AS DIAS_25, AREA_POTRERO AS AREA_3 FROM TAB_POTREROS WHERE UUID_POTRERO = pg_temp.U('B2');
+SELECT FUN_ANULAR_POTRERO_JSON(pg_temp.U('B2'), pg_temp.FINCA(), 'PRU-DUENO') ->> 'CODIGO' AS ANULAR_200,
+       FUN_ANULAR_POTRERO_JSON(pg_temp.U('B2'), pg_temp.FINCA(), 'PRU-DUENO') -> 'DATOS' ->> 'YA_EXISTIA' AS REPETIDO_TRUE;
+
+
+SELECT 'PRUEBA 7.1: Por la sincronización. UN POTRERO NUEVO, UN LOTE QUE ENTRA, SALE (EDITAR) Y BAJAN EN LOS CAMBIOS. DEBE DECIR "3 subidos" Y BAJAR 2 POTREROS ACTIVOS' as PRUEBA;
+SELECT FUN_CREAR_LOTE_JSON(pg_temp.U('A3'), pg_temp.FINCA(), 'Levante', 'PRU-DUENO') ->> 'CODIGO' AS LOTE_200;
+SELECT FUN_SINCRONIZAR_REGISTROS_JSON(pg_temp.FINCA(), 'PRU-VAQUERO', json_build_array(
+    json_build_object('orden', 1, 'uuid', pg_temp.U('B3'), 'tipo', 'POTRERO', 'operacion', 'CREAR', 'datos', json_build_object('nom_potrero', 'La Quebrada', 'area_potrero', 2.25, 'dias_descanso_potrero', 35, 'contorno_potrero', NULL)),
+    json_build_object('orden', 2, 'uuid', pg_temp.U('C4'), 'tipo', 'OCUPACION', 'operacion', 'CREAR', 'datos', json_build_object('uuid_lote', pg_temp.U('A3'), 'uuid_potrero', pg_temp.U('B3'), 'fecha_evento', pg_temp.HACE(3), 'observacion', NULL)),
+    json_build_object('orden', 3, 'uuid', pg_temp.U('C4'), 'tipo', 'OCUPACION', 'operacion', 'EDITAR', 'datos', json_build_object('fecha_salida_ocupacion', pg_temp.HACE(1)))
+)) ->> 'MENSAJE' AS SINCRONIZAR;
+SELECT json_array_length(FUN_OBTENER_CAMBIOS_JSON(pg_temp.FINCA(), 'PRU-DUENO', NULL) -> 'DATOS' -> 'POTREROS') AS POTREROS_2,
+       json_array_length(FUN_OBTENER_CAMBIOS_JSON(pg_temp.FINCA(), 'PRU-DUENO', NULL) -> 'DATOS' -> 'OCUPACIONES') AS OCUPACIONES_ACTIVAS_3;
+SELECT pg_temp.ESTADO('La Quebrada') ->> 'ESTADO' AS QUEBRADA_DESCANSANDO, pg_temp.ESTADO('La Quebrada') ->> 'DIAS_DESCANSO' AS DIAS_1;
+
+SELECT 'PRUEBA 7.2: Anular por la sincronización (el dueño). DEBE DECIR "1 subido"' as PRUEBA;
+SELECT FUN_SINCRONIZAR_REGISTROS_JSON(pg_temp.FINCA(), 'PRU-DUENO', json_build_array(
+    json_build_object('orden', 1, 'uuid', pg_temp.U('C4'), 'tipo', 'OCUPACION', 'operacion', 'ANULAR', 'datos', '{}'::JSON)
+)) ->> 'MENSAJE' AS ANULAR_SINCRONIZANDO;
+SELECT pg_temp.ESTADO('La Quebrada') ->> 'ESTADO' AS QUEBRADA_SIN_USO;
+
+ROLLBACK;
